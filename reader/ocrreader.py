@@ -20,12 +20,19 @@ class OCRReader:
         self.reader = easyocr.Reader(["en"])
         self.model = YOLO("yolo26n-seg.pt")
         self.cam: cv.VideoCapture | None = None
-        self.on_detect_callback: Callable[[int], None] = lambda x: None
+        self.on_detect_callbacks: list[Callable[[int], None]] = []
         self.detection_buffer = []
         self.after_id = ""
 
     def set_on_detect(self, cb: Callable[[int], None]):
-        self.on_detect_callback = cb
+        self.on_detect_callbacks.append(cb)
+
+    def clear_detect_callbacks(self):
+        self.on_detect_callbacks = []
+
+    def __trigger_detect(self, pouch: int):
+        for cb in self.on_detect_callbacks:
+            cb(pouch)
 
     def camera_ready(self) -> bool:
         return self.cam is not None and self.cam.isOpened()
@@ -45,11 +52,6 @@ class OCRReader:
                 c = cam
                 break
         return c
-
-    # implement logic for determining if the screen has a yondr pouch number
-    # take if "average" of the past couple frames are consistent, then likely a pouch number
-    def __determine_presence(self):
-        self.on_detect_callback(371)
 
     def __apply_frame(self, label: Label, frame: cv.typing.MatLike):
         frame = cv.resize(frame, (1200, 800))
@@ -91,7 +93,7 @@ class OCRReader:
                             self.detection_buffer = []
                         else:
                             pouch = self.__draw_text_box(pouch, "POUCH DETECTED")
-                            self.on_detect_callback(av)
+                            self.__trigger_detect(av)
                 else:
                     self.detection_buffer = []
                 self.__apply_frame(widget, pouch)
