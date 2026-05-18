@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import tkinter as tk
+import tkinter.font as tkfont
 from tkinter import ttk
+from tkinter.filedialog import asksaveasfilename
+from tkinter.messagebox import showinfo
 
 from reader.ocrreader import OCRReader
 from student.student_record import Student, StudentRecord
+from ui.pouch_search import PouchSearchPanel
 from ui.student_search import StudentSearchPanel
 
 # Shown in the camera label before a feed starts
@@ -41,8 +45,18 @@ class App(tk.Tk):
         self._reader = OCRReader()
         self._record = record
 
+        def on_detect(pouch: str):
+            s = self._record.students.get(pouch)
+            if s is None:
+                return
+            s.turn_in()
+            showinfo("Pouch Turned in", f"Turned In: {str(s)}")
+
+        self._reader.set_on_detect(on_detect)
+
         self._setup_styles()
         self._build()
+        self._size_search_panel()
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
     # ── Styles ────────────────────────────────────────────────────────────────
@@ -153,6 +167,7 @@ class App(tk.Tk):
     def _build(self) -> None:
         outer = ttk.Frame(self, padding=14)
         outer.pack(fill=tk.BOTH, expand=True)
+        self._outer = outer
 
         # Three columns: [camera] [divider] [search panel]
         outer.columnconfigure(0, weight=0)  # camera — fixed width
@@ -183,19 +198,45 @@ class App(tk.Tk):
             row=0, column=1, sticky="ns", padx=14
         )
 
-        # ── Student search panel ──────────────────────────────────────────────
-        panel = ttk.Frame(outer, style="Panel.TFrame")
-        panel.grid(row=0, column=2, sticky="nsew")
-        panel.rowconfigure(0, weight=1)
-        panel.columnconfigure(0, weight=1)
+        # ── Right column: name search (top) + pouch search (bottom) ──────────
+        right_col = ttk.Frame(outer)
+        right_col.grid(row=0, column=2, sticky="nsew")
+        right_col.columnconfigure(0, weight=1)
+        right_col.rowconfigure(0, weight=2)  # name search — gets more vertical space
+        right_col.rowconfigure(1, weight=0)  # horizontal divider
+        right_col.rowconfigure(2, weight=1)  # pouch search
+
+        # Name search
+        name_panel = ttk.Frame(right_col, style="Panel.TFrame")
+        name_panel.grid(row=0, column=0, sticky="nsew")
+        name_panel.rowconfigure(0, weight=1)
+        name_panel.columnconfigure(0, weight=1)
 
         self._search = StudentSearchPanel(
-            panel,
+            name_panel,
             self._record,
             on_select=self._on_student_selected,
             style="Panel.TFrame",
         )
         self._search.grid(row=0, column=0, sticky="nsew")
+
+        ttk.Separator(right_col, orient=tk.HORIZONTAL).grid(
+            row=1, column=0, sticky="ew"
+        )
+
+        # Pouch search
+        pouch_panel = ttk.Frame(right_col, style="Panel.TFrame")
+        pouch_panel.grid(row=2, column=0, sticky="nsew")
+        pouch_panel.rowconfigure(0, weight=1)
+        pouch_panel.columnconfigure(0, weight=1)
+
+        self._pouch_search = PouchSearchPanel(
+            pouch_panel,
+            self._record,
+            on_select=self._on_pouch_selected,
+            style="Panel.TFrame",
+        )
+        self._pouch_search.grid(row=0, column=0, sticky="nsew")
 
         # ── Camera controls (span full width, below camera) ───────────────────
         ctrl = ttk.Frame(outer)
@@ -235,6 +276,53 @@ class App(tk.Tk):
         )
         self._stop_btn.pack(side=tk.LEFT, padx=(8, 0))
 
+        def export_command():
+            fp = asksaveasfilename()
+            if fp == "":
+                return
+            self._record.export_csv(fp)
+
+        self._export_btn = ttk.Button(
+            ctrl, text="Export as CSV", command=export_command, state=tk.NORMAL
+        )
+
+        self._export_btn.pack(side=tk.LEFT)
+
+    # ── Sizing ─────────────────────────────────────────────────────────────────
+
+    def _size_search_panel(self) -> None:
+        """
+        Set the search panel column's minsize so the widest possible
+        'Selected: …' footer string is never clipped at startup.
+        """
+        info_font = tkfont.Font(family="Helvetica", size=11)
+        badge_font = tkfont.Font(family="Helvetica", size=13, weight="bold")
+        inner_pad = 14 * 2  # padx=14 on each side of the info frame
+        badge_gap = 6  # padx=(0, 6) between badge label and info label
+
+        # Worst-case badge width: the checkmark that appears when turned in
+        badge_px = badge_font.measure("\u2713") + badge_gap
+
+        if self._record.student_list:
+            # Measure both footer formats and take the wider one
+            name_search_widths = (
+                info_font.measure(
+                    f"Selected:  {s.get_name()}   —   Pouch #{s.get_pouch()}"
+                )
+                for s in self._record.student_list
+            )
+            pouch_search_widths = (
+                info_font.measure(
+                    f"{s.get_name()}   —   Pouch #{s.get_pouch()}   —   Grade {s.grade}"
+                )
+                for s in self._record.student_list
+            )
+            max_text_px = max(max(name_search_widths), max(pouch_search_widths))
+        else:
+            max_text_px = info_font.measure("No student selected")
+
+        self._outer.columnconfigure(2, minsize=badge_px + max_text_px + inner_pad)
+
     # ── Camera control ────────────────────────────────────────────────────────
 
     def _start_camera(self) -> None:
@@ -258,6 +346,10 @@ class App(tk.Tk):
 
     def _on_student_selected(self, student: Student | None) -> None:
         """Called whenever the user picks (or deselects) a student."""
+        pass  # hook for callers — extend as needed
+
+    def _on_pouch_selected(self, student: Student | None) -> None:
+        """Called whenever the user picks (or deselects) a student via the pouch search."""
         pass  # hook for callers — extend as needed
 
     def _on_close(self) -> None:

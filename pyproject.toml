@@ -15,4 +15,5 @@ dependencies = [
     "pytesseract>=0.3.13",
     "tk>=0.1.0",
     "ultralytics>=8.4.42",
+    "pyinstaller>=6.20.0",
 ]

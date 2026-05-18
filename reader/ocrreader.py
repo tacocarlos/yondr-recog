@@ -20,17 +20,17 @@ class OCRReader:
         self.reader = easyocr.Reader(["en"])
         self.model = YOLO("yolo26n-seg.pt")
         self.cam: cv.VideoCapture | None = None
-        self.on_detect_callbacks: list[Callable[[int], None]] = []
+        self.on_detect_callbacks: list[Callable[[str], None]] = []
         self.detection_buffer = []
         self.after_id = ""
 
-    def set_on_detect(self, cb: Callable[[int], None]):
+    def set_on_detect(self, cb: Callable[[str], None]):
         self.on_detect_callbacks.append(cb)
 
     def clear_detect_callbacks(self):
         self.on_detect_callbacks = []
 
-    def __trigger_detect(self, pouch: int):
+    def __trigger_detect(self, pouch: str):
         for cb in self.on_detect_callbacks:
             cb(pouch)
 
@@ -84,16 +84,16 @@ class OCRReader:
             result = self.reader.readtext(img_rgb)
             for bb, txt, _ in result:
                 print(txt)
-                if txt.isnumeric():
-                    self.detection_buffer.append(int(txt))
+                txt = txt.strip()
+                if txt:
+                    self.detection_buffer.append(txt)
 
                     if len(self.detection_buffer) >= OCRReader.DETECT_COUNT:
-                        av = np.average(self.detection_buffer)
-                        if av != self.detection_buffer[0]:
+                        if len(set(self.detection_buffer)) > 1:
                             self.detection_buffer = []
                         else:
                             pouch = self.__draw_text_box(pouch, "POUCH DETECTED")
-                            self.__trigger_detect(av)
+                            self.__trigger_detect(self.detection_buffer[0])
                 else:
                     self.detection_buffer = []
                 self.__apply_frame(widget, pouch)

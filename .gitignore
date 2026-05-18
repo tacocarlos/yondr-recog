@@ -9,5 +9,7 @@ wheels/
 # Virtual environments
 .venv
 
-
+*.sqlite
 yolo26n-seg.pt
+*.csv
+.DS_Store

@@ -6,11 +6,12 @@ def nameStr(x: str):
 
 
 class Student:
-    def __init__(self, first, middle, last, pouch_num):
+    def __init__(self, first, middle, last, pouch_num, grade: int = 0):
         self.first = first
         self.middle = middle
         self.last = last
         self.pouch_num = pouch_num
+        self.grade = grade
         self.turned_in = False
 
     def get_pouch(self):
@@ -20,7 +21,7 @@ class Student:
         self.turned_in = True
 
     def __str__(self):
-        return f"[{3:pouch_num}] {nameStr(self.first)} {nameStr(self.middle)} {nameStr(self.last)}"
+        return f"[{self.pouch_num}] {nameStr(self.first)} {nameStr(self.middle)} {nameStr(self.last)}"
 
     def __hash__(self):
         return hash(self.pouch_num)
@@ -28,13 +29,13 @@ class Student:
 
 class StudentList:
     def __init__(self, students: list[Student]):
-        self.db: dict[int, Student] = {s.pouch_num: s for s in students}
+        self.db: dict[str, Student] = {s.pouch_num: s for s in students}
 
     def add_student(self, s: Student) -> bool:
         self.db[s.pouch_num] = s
         return s.pouch_num in self.db
 
-    def turn_in(self, pouch_num: int) -> Student | None:
+    def turn_in(self, pouch_num: str) -> Student | None:
         s = self.get_student(pouch_num)
         if s is None:
             return None
@@ -53,25 +54,29 @@ class StudentList:
                     middle,
                     last,
                 ) = ""
-                pouch_num = -1
+                pouch_num = ""
                 status = False
+                grade = 0
                 for i in range(len(parts)):
                     if i == 0:
-                        first = parts[0]
+                        grade_raw = parts[0].strip()
+                        grade = int(grade_raw) if grade_raw.isdigit() else 0
                     elif i == 1:
-                        last = parts[1]
+                        first = parts[1]
                     elif i == 2:
-                        middle = parts[2]
+                        last = parts[2]
                     elif i == 3:
-                        tok = parts[3]
-                        if tok.isnumeric():
-                            pouch_num = int(tok)
-                        else:
-                            status = bool(parts[3])
+                        middle = parts[3]
                     elif i == 4:
-                        status = int(parts[4])
+                        tok = parts[4].strip()
+                        if tok:
+                            pouch_num = tok
+                        else:
+                            status = bool(parts[4])
+                    elif i == 5:
+                        status = int(parts[5])
 
-                s = Student(first, middle, last, pouch_num)
+                s = Student(first, middle, last, pouch_num, grade)
                 if status:
                     s.turn_in()
                 sl.add_student(s)
@@ -82,7 +87,9 @@ class StudentList:
         with open(csv_path, mode="w") as file:
             writer = csv.writer(file)
             for pouch, s in self.db.items():
-                writer.writerow([s.last, s.first, s.middle, pouch, s.turned_in])
+                writer.writerow(
+                    [s.grade, s.last, s.first, s.middle, pouch, s.turned_in]
+                )
 
-    def get_student(self, pouch_num: int) -> Student | None:
+    def get_student(self, pouch_num: str) -> Student | None:
         return self.db.get(pouch_num)
