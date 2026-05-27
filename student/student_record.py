@@ -1,6 +1,7 @@
 import csv
 from bisect import insort
 from functools import total_ordering
+from tkinter.messagebox import showerror
 from tkinter.simpledialog import askinteger
 from typing import Iterable, cast
 
@@ -22,6 +23,7 @@ class Student(DatabaseModelBase):
     pouch = pw.TextField(unique=True)
     turned_in = pw.BooleanField()
     grade = pw.IntegerField()
+    condition = pw.TextField()
 
     def _apply_change(self):
         s = Student.get_by_id(self.get_id())
@@ -120,6 +122,7 @@ class StudentRecord:
         pouch,
         grade: int,
         turned_in: bool = False,
+        cond: str = "",
         apply_update: bool = False,
     ):
         if self._pouch_is_used(pouch):
@@ -136,6 +139,7 @@ class StudentRecord:
                 "pouch": pouch,
                 "grade": grade,
                 "turned_in": turned_in,
+                "condition": cond,
             },
         )
         print(f"Was created: {was_created}")
@@ -196,13 +200,14 @@ class StudentRecord:
     def load_from_csv(fp: str) -> "StudentRecord":
         sr = StudentRecord([])
         with open(fp, mode="r") as file:
-            for line in file.readlines():
+            for line in file.readlines()[1:]:
                 line = "".join([c for c in line if c.isprintable()])
                 if line.strip() == "":
                     continue
                 grade = -1
-                first, middle, last, pouch = ["", "", "", ""]
+                first, middle, last, pouch, cond = ["", "", "", "", ""]
                 turned_in = False
+                print(f"Reading line {line}")
                 for i, p in enumerate(line.split(",")):
                     if i == 0:
                         grade = int(p)
@@ -217,12 +222,28 @@ class StudentRecord:
                     elif i == 5:
                         if p.lower() == "yes":
                             turned_in = True
-                print(first, middle, last, pouch, turned_in)
-                s = sr.add_student(first, middle, last, pouch, grade, turned_in)
+                    elif i == 6:
+                        cond = p
+
+                print(first, middle, last, pouch, turned_in, cond)
+                s = sr.add_student(first, middle, last, pouch, grade, turned_in, cond)
                 while s is None:
+                    original_holder = sr.students.get(
+                        str(pouch)
+                    )  # pouch is already a str, but pyright
+                    if original_holder is None:
+                        showerror(
+                            "Fatal Pouch Error",
+                            "Pouch number is in use, but no student is assigned it.",
+                        )
+                        exit(1)
+
                     revised_p = askinteger(
                         "Pouch Collision",
-                        f"Pouch number {pouch} is already in use. Please provide a different pouch number.",
+                        f"""Pouch number {pouch} is already in use.
+                        (Already assigned) {first} {middle} {last}
+                        (Original holder) {original_holder.first} {original_holder.middle} {original_holder.last}
+                        Please provide a different pouch number.""",
                     )
                     if revised_p is None:
                         continue
@@ -246,7 +267,20 @@ class StudentRecord:
     def export_csv(self, fp: str):
         with open(fp, mode="w") as file:
             writer = csv.writer(file)
-            for pouch, s in self.students.items():
+            writer.writerow(
+                [
+                    "Grade",
+                    "Last Name",
+                    "First Name",
+                    "Middle Name",
+                    "Pouch Number",
+                    "Turned In?",
+                    "Pouch Condition",
+                ]
+            )
+            for pouch, s in sorted(
+                self.students.items(), key=lambda kv: (kv[1].grade, kv[1].last, kv[0])
+            ):
                 writer.writerow(
                     [
                         s.grade,
@@ -254,7 +288,8 @@ class StudentRecord:
                         s.first,
                         s.middle,
                         pouch,
-                        "Yes" if s.turned_in else "No",
+                        "YES" if s.turned_in else "NO",
+                        s.condition,
                     ]
                 )
 

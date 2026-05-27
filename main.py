@@ -28,13 +28,6 @@ src_file = askopenfilename(
 )
 
 
-def on_detect(pouch: str):
-    s = sr.students.get(pouch)
-    if s is None:
-        return
-    s.turn_in()
-
-
 ext = get_ext(src_file)
 if ext == ".csv":
     sr = StudentRecord.load_from_csv(src_file)
